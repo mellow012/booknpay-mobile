@@ -1,48 +1,71 @@
 package com.example.booknpay.ui.ticket
 
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.booknpay.data.model.TicketDetails
-import com.example.booknpay.domain.use_case.SearchTicketsUseCase
+import com.example.booknpay.data.model.Booking
+import com.example.booknpay.data.repository.FirebaseBookingRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class MyTicketsState(
+    val isLoading: Boolean = true,
+    val bookings: List<Booking> = emptyList(),
+    val error: String? = null
+)
 
 @HiltViewModel
 class MyTicketsViewModel @Inject constructor(
-    private val searchTicketsUseCase: SearchTicketsUseCase
+    private val bookingRepository: FirebaseBookingRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MyTicketsState())
     val state: StateFlow<MyTicketsState> = _state.asStateFlow()
 
     init {
-        onEvent(MyTicketsEvent.SearchTickets(""))
+        loadBookings()
     }
 
-    fun onEvent(event: MyTicketsEvent) {
-        when (event) {
-            is MyTicketsEvent.SearchTickets -> {
-                _state.value = _state.value.copy(searchQuery = event.query)
-                searchTicketsUseCase(event.query)
-                    .onEach { tickets ->
-                        _state.value = _state.value.copy(tickets = tickets)
+    private fun loadBookings() {
+        viewModelScope.launch(Dispatchers.IO) {
+            bookingRepository.getUserBookingsRealtime()
+                .flowOn(Dispatchers.IO)
+                .catch { e ->
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            error = e.message ?: "Failed to load bookings"
+                        )
                     }
-                    .launchIn(viewModelScope)
+                }
+                .collect { bookings ->
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            bookings = bookings,
+                            error = null
+                        )
+                    }
+                }
+        }
+    }
+
+    fun cancelBooking(bookingId: String, scheduleId: String, seatNumbers: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = bookingRepository.cancelBooking(bookingId, scheduleId, seatNumbers)
+            if (result.isFailure) {
+                _state.update {
+                    it.copy(error = result.exceptionOrNull()?.message ?: "Failed to cancel")
+                }
             }
         }
     }
-}
 
-data class MyTicketsState(
-    val tickets: List<TicketDetails> = emptyList(),
-    val searchQuery: String = ""
-)
-
-sealed class MyTicketsEvent {
-    data class SearchTickets(val query: String) : MyTicketsEvent()
+    override fun onCleared() {
+        super.onCleared()
+        bookingRepository.cleanup()
+    }
 }

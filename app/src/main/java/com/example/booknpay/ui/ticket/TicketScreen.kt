@@ -13,8 +13,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun TicketScreen(
-    bookingId: String?,
-    passengerName: String?,
+    bookingReference: String?,
     onDone: () -> Unit
 ) {
     Column(
@@ -24,9 +23,8 @@ fun TicketScreen(
     ) {
         Text("E-Ticket")
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Booking ID: ${bookingId ?: "N/A"}")
-        Text("Passenger: ${passengerName ?: "N/A"}")
-        // Add more ticket details here
+        Text("Booking ID: ${bookingReference ?: "N/A"}")
+        // Add more ticket details here from the booking object
         Spacer(modifier = Modifier.height(32.dp))
         Button(onClick = onDone) {
             Text("Done")

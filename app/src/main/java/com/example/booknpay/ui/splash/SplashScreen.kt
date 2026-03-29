@@ -1,210 +1,175 @@
 package com.example.booknpay.ui.splash
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.StartOffset
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
+import com.example.booknpay.R
+import com.example.booknpay.ui.navigation.Screen
+import com.example.booknpay.ui.theme.SplashBackground
+import com.example.booknpay.ui.theme.SplashBlue
 import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(
     onNavigateToHome: () -> Unit,
     onNavigateToAuth: () -> Unit,
+    navController: NavController,
     viewModel: SplashViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
 
-    // Animations
+    // ── Logo pop-in ───────────────────────────────────────────────────────────
     val scale by animateFloatAsState(
-        targetValue = if (state.isAnimating) 1f else 0.5f,
+        targetValue   = if (state.isAnimating) 1f else 0.72f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
+            stiffness    = Spring.StiffnessLow
         ),
-        label = "scale"
+        label = "logoScale"
     )
 
+    // ── Fade in ───────────────────────────────────────────────────────────────
     val alpha by animateFloatAsState(
-        targetValue = if (state.isAnimating) 1f else 0f,
-        animationSpec = tween(durationMillis = 1000),
-        label = "alpha"
+        targetValue   = if (state.isAnimating) 1f else 0f,
+        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        label         = "logoAlpha"
     )
 
-    // Navigation effect
+    // ── Navigate when destination is set ─────────────────────────────────────
     LaunchedEffect(state.navigationDestination) {
         state.navigationDestination?.let { destination ->
-            delay(300) // Small delay for smooth transition
             when (destination) {
-                NavigationDestination.HOME -> onNavigateToHome()
-                NavigationDestination.AUTH -> onNavigateToAuth()
+                NavigationDestination.HOME -> {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Splash.route) { inclusive = true }
+                    }
+                }
+                NavigationDestination.AUTH -> {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.Splash.route) { inclusive = true }
+                    }
+                }
+                NavigationDestination.ONBOARDING -> {
+                    navController.navigate(Screen.Onboarding.route) {
+                        popUpTo(Screen.Splash.route) { inclusive = true }
+                    }
+                }
             }
         }
     }
 
+    // ── Root: same colour as the logo's own background ────────────────────────
     Box(
-        modifier = Modifier
+        modifier         = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF1976D2), // Primary blue
-                        Color(0xFF1565C0), // Darker blue
-                        Color(0xFF0D47A1)  // Deep blue
-                    )
-                )
-            ),
+            .background(SplashBackground),   // #F0F0F2 — exact logo bg
         contentAlignment = Alignment.Center
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(32.dp)
+            modifier             = Modifier
+                .padding(32.dp)
+                .scale(scale)
+                .alpha(alpha),
+            horizontalAlignment  = Alignment.CenterHorizontally,
+            verticalArrangement  = Arrangement.Center
         ) {
-            // Logo/Icon
-            Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .scale(scale)
-                    .alpha(alpha),
-                contentAlignment = Alignment.Center
-            ) {
-                // Bus icon (you can replace with your logo)
-                Text(
-                    text = "🚌",
-                    fontSize = 80.sp,
-                    modifier = Modifier.alpha(alpha)
-                )
-            }
+            // ── Logo: no container shape, no border, no shadow ────────────────
+            // The image already has the correct background baked in, so we simply
+            // render it at natural size — the screen background matches perfectly.
+            Image(
+                painter            = painterResource(id = R.drawable.tibhukebus_logo),
+                contentDescription = "TibhukeBus",
+                modifier           = Modifier
+                    .width(280.dp)       // fill most of the screen width
+                    .aspectRatio(1.6f)   // preserve the logo's natural w:h ratio
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // App name
+            // ── Tagline ───────────────────────────────────────────────────────
             Text(
-                text = "BookNPay",
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                modifier = Modifier.alpha(alpha)
+                text       = "Your Journey, Our Priority",
+                style      = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color      = SplashBlue      // #0073B7 — matches "Bus" text in logo
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(52.dp))
 
-            // Tagline
-            Text(
-                text = "Your Journey, Our Priority",
-                fontSize = 16.sp,
-                color = Color.White.copy(alpha = 0.8f),
-                modifier = Modifier.alpha(alpha)
-            )
-
-            Spacer(modifier = Modifier.height(48.dp))
-
-            // Loading indicator
+            // ── Loading dots ──────────────────────────────────────────────────
             if (state.isLoading) {
-                LoadingDots(modifier = Modifier.alpha(alpha))
+                LoadingDots(dotColor = SplashBlue)
             }
 
-            // Error message
-            state.error?.let { error ->
-                Spacer(modifier = Modifier.height(16.dp))
+            state.error?.let { err ->
+                Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = error,
-                    color = Color.Red.copy(alpha = 0.8f),
-                    fontSize = 14.sp,
-                    modifier = Modifier.alpha(alpha)
+                    text  = err,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SplashBlue.copy(alpha = 0.6f)
                 )
             }
         }
 
-        // Version info at bottom
+        // ── Version number ────────────────────────────────────────────────────
         Text(
-            text = "Version ${state.appVersion}",
-            fontSize = 12.sp,
-            color = Color.White.copy(alpha = 0.5f),
+            text     = "v${state.appVersion}",
+            style    = MaterialTheme.typography.labelSmall,
+            color    = Color(0xFF1A1A1A).copy(alpha = 0.25f),  // matches "Tibhuke" ink, faded
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp)
+                .padding(bottom = 28.dp)
                 .alpha(alpha)
         )
     }
 }
 
+// ── Animated loading dots ─────────────────────────────────────────────────────
 @Composable
-fun LoadingDots(modifier: Modifier = Modifier) {
-    val infiniteTransition = rememberInfiniteTransition(label = "dots")
-
+fun LoadingDots(
+    modifier: Modifier = Modifier,
+    dotColor: Color    = SplashBlue
+) {
+    val transition = rememberInfiniteTransition(label = "dots")
     Row(
-        modifier = modifier,
+        modifier              = modifier,
         horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment     = Alignment.CenterVertically
     ) {
         repeat(3) { index ->
-            val alpha by infiniteTransition.animateFloat(
-                initialValue = 0.3f,
-                targetValue = 1f,
+            val dotAlpha by transition.animateFloat(
+                initialValue  = 0.2f,
+                targetValue   = 1f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(600),
-                    repeatMode = RepeatMode.Reverse,
+                    animation          = tween(600),
+                    repeatMode         = RepeatMode.Reverse,
                     initialStartOffset = StartOffset(index * 200)
                 ),
                 label = "dot_$index"
             )
-
             Box(
                 modifier = Modifier
-                    .size(8.dp)
-                    .alpha(alpha)
-                    .background(Color.White, shape = MaterialTheme.shapes.small)
+                    .size(9.dp)
+                    .clip(CircleShape)
+                    .background(dotColor.copy(alpha = dotAlpha))
             )
-
-            if (index < 2) {
-                Spacer(modifier = Modifier.width(8.dp))
-            }
+            if (index < 2) Spacer(modifier = Modifier.width(9.dp))
         }
-    }
-}
-
-// Preview
-@Preview(showBackground = true,showSystemUi = true)
-@Composable
-fun SplashScreenPreview() {
-    MaterialTheme {
-        SplashScreen(
-            onNavigateToHome = {},
-            onNavigateToAuth = {}
-        )
     }
 }

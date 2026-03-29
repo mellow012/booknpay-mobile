@@ -1,21 +1,54 @@
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            # Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# ─── Firebase ────────────────────────────────────────────────────────────────
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# ─── Firestore model classes ──────────────────────────────────────────────────
+# Firestore deserialises documents into your data classes via reflection.
+# Any model class annotated with @IgnoreExtraProperties or mapped from Firestore
+# must be kept or fields will be stripped and objects will deserialise as nulls.
+-keep class com.example.booknpay.data.model.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# ─── Hilt ─────────────────────────────────────────────────────────────────────
+-keep class dagger.hilt.** { *; }
+-keep class javax.inject.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# ─── Retrofit / OkHttp ────────────────────────────────────────────────────────
+-keep class retrofit2.** { *; }
+-keep class okhttp3.** { *; }
+-dontwarn okhttp3.**
+-dontwarn okio.**
+
+# ─── Ktor ─────────────────────────────────────────────────────────────────────
+-keep class io.ktor.** { *; }
+-dontwarn io.ktor.**
+
+# ─── Kotlinx serialization ────────────────────────────────────────────────────
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
+-keepclasseswithmembers class **$$serializer { *; }
+
+# ─── Gson ─────────────────────────────────────────────────────────────────────
+-keep class com.google.gson.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+
+# ─── ZXing (QR code) ──────────────────────────────────────────────────────────
+-keep class com.google.zxing.** { *; }
+
+# ─── Room ─────────────────────────────────────────────────────────────────────
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Entity class *
+-keep @androidx.room.Dao class *
+
+# ─── Coroutines ───────────────────────────────────────────────────────────────
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+-dontwarn kotlinx.coroutines.**
+
+# ─── Timber ───────────────────────────────────────────────────────────────────
+-dontwarn org.jetbrains.annotations.**
+
+# ─── Suppress common warnings ────────────────────────────────────────────────
+-dontwarn javax.annotation.**
+-dontwarn sun.misc.Unsafe

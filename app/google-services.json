@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "936031509967",
+    "project_id": "busbookingapp-50592",
+    "storage_bucket": "busbookingapp-50592.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:936031509967:android:8acd5fc1ce6d37fb0446ba",
+        "android_client_info": {
+          "package_name": "com.example.booknpay"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "936031509967-3dmt3g23vl93koig4acq246047us4du2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.booknpay",
+            "certificate_hash": "81560be1bf7c8710cb731def24a8f4efb6d60bca"
+          }
+        },
+        {
+          "client_id": "936031509967-2rqpujk61ojdrk02p33odnpoumkh7npj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyATb4ynafT37WUFyIyr1VySkcR_575KlCE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "936031509967-2rqpujk61ojdrk02p33odnpoumkh7npj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

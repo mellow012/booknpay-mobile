@@ -5,6 +5,9 @@ import com.example.booknpay.data.model.Passenger
 import com.google.firebase.Timestamp
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class Converters {
     private val gson = Gson()
@@ -50,4 +53,51 @@ class Converters {
         // Explicitly provide the type to emptyList
         return gson.toJson(list ?: emptyList<String>())
     }
+
+    companion object {
+        /**
+         * Utility to format timestamps for the UI.
+         * Accessible via Converters.formatTimestamp(ts)
+         */
+        fun formatTimestamp(timestamp: Timestamp?): String {
+            if (timestamp == null) return "--:--"
+            return try {
+                val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+                sdf.format(timestamp.toDate())
+            } catch (e: Exception) {
+                "--:--"
+            }
+        }
+
+        fun formatPrice(price: Double): String {
+            return java.text.NumberFormat.getIntegerInstance(Locale.US).format(price)
+        }
+        fun formatDateForUI(millis: Long?): String {
+            if (millis == null) return "Select Date"
+            return try {
+                val sdf = SimpleDateFormat("EEE, dd MMM yyyy", Locale.getDefault())
+                sdf.format(Date(millis))
+            } catch (e: Exception) {
+                "Select Date"
+            }
+        }
+
+        /**
+         * Converts selected millis from DatePicker back to Firebase Timestamp
+         */
+        fun millisToTimestamp(millis: Long?): com.google.firebase.Timestamp? {
+            return millis?.let { com.google.firebase.Timestamp(it / 1000, 0) }
+        }
+    }
+
 }
+
+fun getTimeBasedGreeting(): Pair<String, String> {
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    return when (hour) {
+        in 0..11 -> "Mwadzuka bwanji" to "Good Morning"
+        in 12..16 -> "Mwaswera bwanji" to "Good Afternoon"
+        else -> "Mwaswera bwanji" to "Good Evening"
+    }
+}
+

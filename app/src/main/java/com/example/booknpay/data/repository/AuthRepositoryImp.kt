@@ -1,8 +1,8 @@
 package com.example.booknpay.data.repository
 
+import com.example.booknpay.data.model.User
 import com.example.booknpay.data.model.AuthResult
 import com.example.booknpay.data.model.RegisterRequest
-import com.example.booknpay.data.model.User
 import com.example.booknpay.domain.repository.AuthRepository
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth

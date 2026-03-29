@@ -1,20 +1,21 @@
 package com.example.booknpay.ui.splash
 
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.booknpay.data.datastore.PreferencesManager
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 enum class NavigationDestination {
-    HOME, AUTH
+    HOME, AUTH, ONBOARDING
 }
 
 data class SplashState(
@@ -27,37 +28,39 @@ data class SplashState(
 
 @HiltViewModel
 class SplashViewModel @Inject constructor(
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val preferencesManager: PreferencesManager
+
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SplashState())
     val state: StateFlow<SplashState> = _state.asStateFlow()
 
     init {
-        checkAuthAndNavigate()
+        checkFirstLaunchAndAuth()
     }
 
-    private fun checkAuthAndNavigate() {
+    private fun checkFirstLaunchAndAuth() {
         viewModelScope.launch {
             try {
-                // Start animation
                 _state.update { it.copy(isAnimating = true) }
 
-                // Minimum splash duration for smooth UX
-                delay(2000)
+                // Minimum splash duration for nice animation
+                delay(1800)
 
-                // Check authentication status
+                val hasSeenOnboarding = preferencesManager.hasSeenOnboarding.first()
                 val currentUser = auth.currentUser
 
-                // Update navigation destination
+                val destination = when {
+                    !hasSeenOnboarding -> NavigationDestination.ONBOARDING
+                    currentUser != null -> NavigationDestination.HOME
+                    else -> NavigationDestination.AUTH
+                }
+
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        navigationDestination = if (currentUser != null) {
-                            NavigationDestination.HOME
-                        } else {
-                            NavigationDestination.AUTH
-                        }
+                        navigationDestination = destination
                     )
                 }
 
@@ -65,12 +68,18 @@ class SplashViewModel @Inject constructor(
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        error = "Failed to initialize: ${e.message}",
-                        // Navigate to auth on error (safe fallback)
+                        error = "Failed to initialize app",
                         navigationDestination = NavigationDestination.AUTH
                     )
                 }
             }
+        }
+    }
+
+    // Call this from OnboardingScreen when user finishes
+    fun setHasSeenOnboarding() {
+        viewModelScope.launch {
+            preferencesManager.setHasSeenOnboarding()
         }
     }
 }

@@ -1,37 +1,18 @@
 package com.example.booknpay.ui.home.components
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.EventSeat
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.booknpay.ui.home.UpcomingBooking
 
@@ -40,36 +21,13 @@ fun UpcomingTripsRow(
     bookings: List<UpcomingBooking>,
     onBookingClick: (String) -> Unit
 ) {
-    if (bookings.isNotEmpty()) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Upcoming Trips",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(onClick = { /* Navigate to all bookings */ }) {
-                    Text("See All")
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp)
-            ) {
-                items(bookings) { booking ->
-                    UpcomingTripCard(
-                        booking = booking,
-                        onBookingClick = onBookingClick
-                    )
-                }
-            }
+    if (bookings.isEmpty()) return
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding        = PaddingValues(horizontal = 16.dp)
+    ) {
+        items(bookings, key = { it.id }) { booking ->
+            UpcomingTripCard(booking = booking, onClick = { onBookingClick(booking.id) })
         }
     }
 }
@@ -77,130 +35,160 @@ fun UpcomingTripsRow(
 @Composable
 private fun UpcomingTripCard(
     booking: UpcomingBooking,
-    onBookingClick: (String) -> Unit
+    onClick: () -> Unit
 ) {
+    // Colours keyed to booking status
+    val (cardColor, accentColor) = when {
+        booking.status == "confirmed" && booking.paymentStatus == "paid" ->
+            MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.primary
+        booking.status == "confirmed" ->
+            MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.tertiary
+        else ->
+            MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.secondary
+    }
+
+    val (statusIcon, statusLabel) = when {
+        booking.status == "confirmed" && booking.paymentStatus == "paid" ->
+            Icons.Default.CheckCircle to "Confirmed"
+        booking.status == "confirmed" ->
+            Icons.Default.Payment to "Pay now"
+        else ->
+            Icons.Default.HourglassEmpty to "Pending"
+    }
+
     Card(
-        modifier = Modifier
+        modifier  = Modifier
             .width(260.dp)
-            .shadow(4.dp, RoundedCornerShape(16.dp))
-            .clickable { onBookingClick(booking.id) },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+            .clickable(onClick = onClick),
+        shape     = RoundedCornerShape(20.dp),
+        colors    = CardDefaults.cardColors(containerColor = cardColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+
             // Status badge
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.tertiaryContainer
+            Row(
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier              = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(statusIcon, null, tint = accentColor, modifier = Modifier.size(14.dp))
                     Text(
-                        text = booking.status,
+                        text       = statusLabel,
+                        style      = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color      = accentColor
+                    )
+                }
+                Text(
+                    text  = booking.bookingReference,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accentColor.copy(alpha = 0.7f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Route: Origin → Destination
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text(
+                        text  = "From",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    )
+                    Text(
+                        text       = booking.origin,
+                        style      = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint     = accentColor,
+                    modifier = Modifier
+                        .padding(horizontal = 10.dp)
+                        .size(20.dp)
+                )
+                Column {
+                    Text(
+                        text  = "To",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    )
+                    Text(
+                        text       = booking.destination,
+                        style      = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = accentColor.copy(alpha = 0.2f), thickness = 1.dp)
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Route
-            Text(
-                text = booking.route,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Date & Time
+            // Date + time row
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.CalendarToday,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                TripInfoChip(
+                    icon  = Icons.Default.CalendarToday,
+                    label = booking.departureDate,
+                    tint  = accentColor
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = booking.date,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                TripInfoChip(
+                    icon  = Icons.Default.AccessTime,
+                    label = booking.departureTime,
+                    tint  = accentColor
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
+            // Seats + amount row
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.AccessTime,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                TripInfoChip(
+                    icon  = Icons.Default.EventSeat,
+                    label = "Seats: ${booking.seatNumbers}",
+                    tint  = accentColor
                 )
-                Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = booking.time,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Seats
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.EventSeat,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Seats: ${booking.seatNumbers}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    text       = "MWK ${"%,.0f".format(booking.totalAmount)}",
+                    style      = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color      = accentColor
                 )
             }
         }
     }
 }
 
-@Preview(showBackground = true, showSystemUi = true)
 @Composable
-fun UpcomingTripsRowPreview() {
-    UpcomingTripCard(
-        booking = UpcomingBooking(
-            id = "1",
-            status = "Confirmed",
-            route = "Nairobi - Mombasa",
-            date = "2023-09-15",
-            time = "10:00 AM",
-            seatNumbers = "A1, A2, A3"
-            ),
-        onBookingClick={""}
-    )
+private fun TripInfoChip(
+    icon:  androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint:  androidx.compose.ui.graphics.Color
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(icon, null, tint = tint.copy(alpha = 0.75f), modifier = Modifier.size(13.dp))
+        Text(
+            text  = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+        )
+    }
 }

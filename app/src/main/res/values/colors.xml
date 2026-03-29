@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- TibhukeBus brand colours — keep in sync with Color.kt -->
+
+    <!-- Splash / window background — exact logo background colour -->
+    <color name="splash_bg">#F0F0F2</color>
+
+    <!-- Primary brand blue — matches "Bus" text + arc + wheels in the logo -->
+    <color name="brand_500">#0073B7</color>
+    <color name="brand_700">#0A4FA0</color>
+
+    <!-- Near-black — matches "Tibhuke" wordmark -->
+    <color name="ink_900">#1A1A1A</color>
+
+    <!-- Legacy names kept for any layout XML that still references them -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
@@ -7,4 +20,5 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
 </resources>

@@ -21,133 +21,145 @@ class SearchViewModel @Inject constructor(
     val state: StateFlow<SearchState> = _state.asStateFlow()
 
     init {
-        loadRoutes()
+        loadInitialData()
     }
 
-    private fun loadRoutes() {
+    private fun loadInitialData() {
         viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
             try {
+                // 1. Fetch everything in parallel
                 val routes = routeRepository.getRoutes()
-                _state.update { it.copy(availableRoutes = routes) }
+                val rawSchedules = scheduleRepository.getSchedules() // This returns List<Schedule>
+                // If you have a company repository, fetch that too.
+                // Otherwise, we map what we have.
+
+                // 2. Map List<Schedule> -> List<ScheduleDetails>
+                val routeMap = routes.associateBy { it.id }
+
+                val mappedSchedules = rawSchedules.mapNotNull { schedule ->
+                    val route = routeMap[schedule.routeId]
+                    if (route != null) {
+                        ScheduleDetails(
+                            schedule = schedule,
+                            origin = route.origin,
+                            destination = route.destination,
+                            // If your ScheduleDetails model has a company field:
+                            // company = companyMap[schedule.companyId]
+                        )
+                    } else null
+                }
+
+                _state.update {
+                    it.copy(
+                        availableRoutes = routes,
+                        allSchedules = mappedSchedules, // Now types match!
+                        isLoading = false
+                    )
+                }
+
+                // Trigger the initial filter to show data immediately
+                applyFiltersAndSort()
+
             } catch (e: Exception) {
-                _state.update { it.copy(error = "Failed to load routes") }
+                _state.update { it.copy(isLoading = false, error = "Connection error: ${e.localizedMessage}") }
             }
         }
+    }
+
+    fun onFilterChange(filter: String) {
+        _state.update { it.copy(activeFilter = filter) }
+        applyFiltersAndSort() // Re-run the search logic with the new filter
+    }
+    // --- Search Logic ---
+
+    fun onQueryChange(query: String) {
+        _state.update { it.copy(searchQuery = query, hasSearched = query.isNotEmpty()) }
+        applyFiltersAndSort()
     }
 
     fun onOriginChange(origin: String) {
         _state.update { it.copy(origin = origin) }
     }
 
-    fun onDestinationChange(destination: String) {
-        _state.update { it.copy(destination = destination) }
+    fun onDestinationChange(dest: String) {
+        _state.update { it.copy(destination = dest) }
     }
 
     fun onDateChange(date: Date) {
         _state.update { it.copy(selectedDate = date) }
     }
 
-    fun onSortChange(sortOption: SortOption) {
-        _state.update {
-            it.copy(
-                sortBy = sortOption,
-                searchResults = sortResults(it.searchResults, sortOption)
-            )
-        }
+    fun onPassengerCountChange(count: Int) {
+        _state.update { it.copy(passengerCount = count.coerceIn(1, 20)) }
+    }
+
+    // --- Filter & Sort Logic ---
+
+    fun onSortChange(option: SortOption) {
+        _state.update { it.copy(sortBy = option) }
+        applyFiltersAndSort()
     }
 
     fun onPriceRangeChange(range: ClosedFloatingPointRange<Float>) {
         _state.update { it.copy(priceRange = range) }
-        filterResults()
+        applyFiltersAndSort()
     }
 
     fun searchSchedules() {
         if (_state.value.origin.isEmpty() || _state.value.destination.isEmpty()) {
-            _state.update { it.copy(error = "Please select origin and destination") }
+            _state.update { it.copy(error = "Please select both From and To cities.") }
             return
         }
-
-        viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null, hasSearched = true) }
-
-            try {
-                combine(
-                    scheduleRepository.getSchedulesRealtime(),
-                    flow { emit(routeRepository.getRoutes()) }
-                ) { schedules, routes ->
-                    val routeMap = routes.associateBy { it.id }
-
-                    // Filter schedules by origin/destination and date
-                    val filtered = schedules.mapNotNull { schedule ->
-                        val route = routeMap[schedule.routeId]
-                        if (route != null &&
-                            route.origin.equals(_state.value.origin, ignoreCase = true) &&
-                            route.destination.equals(_state.value.destination, ignoreCase = true) &&
-                            isSameDay(schedule.departureDateTime?.toDate(), _state.value.selectedDate)) {
-                            ScheduleDetails(schedule, route.origin, route.destination)
-                        } else null
-                    }
-
-                    filtered
-                }
-                    .catch { e ->
-                        _state.update {
-                            it.copy(
-                                isLoading = false,
-                                error = "Search failed: ${e.message}"
-                            )
-                        }
-                    }
-                    .collect { results ->
-                        _state.update {
-                            it.copy(
-                                isLoading = false,
-                                searchResults = sortResults(results, it.sortBy)
-                            )
-                        }
-                    }
-            } catch (e: Exception) {
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        error = "Search failed: ${e.message}"
-                    )
-                }
-            }
-        }
+        _state.update { it.copy(hasSearched = true) }
+        applyFiltersAndSort()
     }
 
     fun refresh() {
         viewModelScope.launch {
             _state.update { it.copy(isRefreshing = true) }
-            searchSchedules()
+            loadInitialData()
             _state.update { it.copy(isRefreshing = false) }
         }
     }
 
-    private fun filterResults() {
-        val current = _state.value
-        val filtered = current.searchResults.filter {
-            it.schedule.price in current.priceRange.start.toDouble()..current.priceRange.endInclusive.toDouble()
-        }
-        _state.update { it.copy(searchResults = sortResults(filtered, it.sortBy)) }
-    }
+    /**
+     * This is the "Engine" that handles both global text search
+     * and specific Route/Date filtering.
+     */
+    private fun applyFiltersAndSort() {
+        val currentState = _state.value
+        val query = currentState.searchQuery.lowercase().trim()
 
-    private fun sortResults(results: List<ScheduleDetails>, sortOption: SortOption): List<ScheduleDetails> {
-        return when (sortOption) {
-            SortOption.DEPARTURE_TIME -> results.sortedBy { it.schedule.departureDateTime }
-            SortOption.PRICE_LOW_TO_HIGH -> results.sortedBy { it.schedule.price }
-            SortOption.PRICE_HIGH_TO_LOW -> results.sortedByDescending { it.schedule.price }
-            SortOption.AVAILABLE_SEATS -> results.sortedByDescending { it.schedule.availableSeats }
-        }
-    }
+        var filtered = currentState.allSchedules.filter { item ->
+            val matchesPrice = item.schedule.price.toFloat() in currentState.priceRange
+            val matchesPassengers = item.schedule.availableSeats >= currentState.passengerCount
 
-    private fun isSameDay(date1: Date?, date2: Date): Boolean {
-        if (date1 == null) return false
-        val cal1 = Calendar.getInstance().apply { time = date1 }
-        val cal2 = Calendar.getInstance().apply { time = date2 }
-        return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-                cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
+            // If user typed in the Global Search Bar
+            val matchesQuery = if (query.isEmpty()) true else {
+                item.origin.lowercase().contains(query) ||
+                        item.destination.lowercase().contains(query) ||
+                        (item.company?.name?.lowercase()?.contains(query) ?: false)
+            }
+
+            // If user used the Specific Route Picker (Integrated Search)
+            val matchesRoute = if (currentState.origin.isEmpty() || currentState.destination.isEmpty()) true else {
+                item.origin.equals(currentState.origin, ignoreCase = true) &&
+                        item.destination.equals(currentState.destination, ignoreCase = true)
+            }
+
+            matchesPrice && matchesPassengers && matchesQuery && matchesRoute
+        }
+
+        // Apply Sorting
+        filtered = when (currentState.sortBy) {
+            SortOption.DEPARTURE_TIME -> filtered.sortedBy { it.schedule.departureDateTime }
+            SortOption.PRICE_LOW_TO_HIGH -> filtered.sortedBy { it.schedule.price }
+            SortOption.PRICE_HIGH_TO_LOW -> filtered.sortedByDescending { it.schedule.price }
+            SortOption.AVAILABLE_SEATS -> filtered.sortedByDescending { it.schedule.availableSeats }
+        }
+
+        _state.update { it.copy(searchResults = filtered) }
     }
 
     fun clearError() {

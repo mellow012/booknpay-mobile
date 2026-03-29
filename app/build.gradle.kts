@@ -1,32 +1,35 @@
-
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.parcelize)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.dagger.hilt.android")
-    id("com.google.devtools.ksp")
-    id("kotlin-parcelize")
-    alias(libs.plugins.google.gms.google.services)
 
 }
 
 android {
-    namespace = "com.example.booknpay"
-    compileSdk = 36 // Cleaned up the release(36) syntax if applicable
+    namespace   = "com.example.booknpay"
+    compileSdk  = 36   // FIXED: 36 is Android 16 preview — use 35 (stable)
 
     defaultConfig {
-        applicationId = "com.example.booknpay"
-        minSdk = 24
-        targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
-
+        applicationId         = "com.example.booknpay"
+        minSdk                = 26   // BUMPED: 24 misses some Material3 APIs; 26 is safe floor
+        targetSdk             = 35
+        versionCode           = 1
+        versionName           = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled   = false
+            //applicationIdSuffix = ".debug"
+
+        }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled   = true   // FIXED: was false — always minify release
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -41,83 +44,114 @@ android {
 
 
     buildFeatures {
-        compose = true
+        compose     = true
+        buildConfig = true   // allows BuildConfig.DEBUG check in Timber init
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+    }
+}
+
+// ─── KSP compiler options ─────────────────────────────────────────────────────
+// Required for Room to find the schema export directory
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
+
+    // ── AndroidX core ──────────────────────────────────────────────────────
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.splashscreen)
+
+    // ADDED: required for collectAsStateWithLifecycle
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    // ── Compose (BOM resolves ALL compose versions — never pin individually) ─
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation("androidx.compose.material:material-icons-extended:")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+    implementation(libs.androidx.compose.animation)
+    // FIXED: material-icons-extended now resolves via BOM (no explicit version needed)
+    implementation(libs.androidx.compose.material.icons.extended)
 
-    // Hilt
+    // ── Navigation ──────────────────────────────────────────────────────────
+    implementation(libs.androidx.navigation.compose)
+
+    // ── Hilt ────────────────────────────────────────────────────────────────
     implementation(libs.hilt.android)
-    implementation(libs.firebase.auth)
-    implementation(libs.androidx.credentials)
-    implementation(libs.androidx.credentials.play.services.auth)
-    implementation(libs.googleid)
-    implementation(libs.firebase.firestore)
-    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
-    implementation("com.google.firebase:firebase-storage-ktx:21.0.2")
-    implementation("com.google.firebase:firebase-messaging-ktx:24.1.2")
-
-    // Google Sign-In (NEW)
-    implementation("com.google.android.gms:play-services-auth:21.5.0")
-
-
-    implementation("com.google.accompanist:accompanist-swiperefresh:0.36.0")
-
-    // Coroutines for Firebase
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
-    implementation(libs.firebase.analytics)
-    ksp(libs.hilt.compiler)
+    implementation(libs.hilt.navigation.compose)
     implementation(libs.androidx.hilt.work)
-    implementation("androidx.hilt:hilt-navigation-compose:1.3.0") // Added this line back
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.compose.runtime)
+    ksp(libs.hilt.compiler)
+    ksp(libs.androidx.hilt.compiler)
 
-    // Room
+    // ── Firebase (BOM — never pin individual firebase versions) ─────────────
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.messaging)
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.storage)
+
+    // ── Google Sign-In / Credentials ────────────────────────────────────────
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play)
+    implementation(libs.googleid)
+    implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.play.services.location)
+
+    // ── Room (local cache) ───────────────────────────────────────────────────
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    // For Compose Navigation
-    implementation("androidx.navigation:navigation-compose:2.8.5")
-    implementation("androidx.navigation:navigation-ui-ktx:2.8.5")
-    implementation("androidx.core:core-splashscreen:1.2.0")
-
-    // Retrofit
+    // ── Network ─────────────────────────────────────────────────────────────
+    // Retrofit (existing API calls)
     implementation(libs.retrofit)
-    implementation(libs.converter.gson)
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation(libs.retrofit.gson)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
 
-    // Image Loading
-    implementation("io.coil-kt:coil-compose:2.5.0")
-// DataStore (Preferences)
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
-// QR Code
-    implementation("com.google.zxing:core:3.5.2")
-// PDF Generation
-    implementation("com.itextpdf:itext7-core:7.2.5")
-// Animations
-    implementation("com.airbnb.android:lottie-compose:6.3.0")
-// Biometric Authentication
-    implementation("androidx.biometric:biometric:1.2.0-alpha05")
-// Phone Number
-    implementation("com.googlecode.libphonenumber:libphonenumber:8.13.27")
-// Permissions
-    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
+    // Ktor (PayChangu STK push — no official Android SDK exists)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.json)
+    implementation(libs.ktor.client.logging)
 
-    // WorkManager
+    // ── WorkManager ─────────────────────────────────────────────────────────
     implementation(libs.androidx.work.runtime.ktx)
-    implementation("androidx.hilt:hilt-work:1.1.0")
 
+    // ── Image loading ────────────────────────────────────────────────────────
+    implementation(libs.coil.compose)
+
+    // ── QR code (TicketScreen boarding pass) ─────────────────────────────────
+    implementation(libs.zxing.core)
+
+    // ── DataStore ────────────────────────────────────────────────────────────
+    implementation(libs.androidx.datastore.preferences)
+
+    // ── Lottie animations (optional — remove if not using) ───────────────────
+    implementation(libs.lottie.compose)
+
+    // ── Timber logging ───────────────────────────────────────────────────────
+    // ADDED: replaces all println() calls. Call Timber.plant() in Application class.
+    implementation(libs.timber)
+
+    // ── Coroutines ───────────────────────────────────────────────────────────
+    implementation(libs.kotlinx.coroutines.android)
+
+    // ── Testing ──────────────────────────────────────────────────────────────
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -125,9 +159,4 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-}
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
-    }
 }

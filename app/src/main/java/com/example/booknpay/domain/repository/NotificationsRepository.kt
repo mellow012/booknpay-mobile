@@ -5,6 +5,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
@@ -32,20 +33,25 @@ class NotificationRepository @Inject constructor(
         val userId = auth.currentUser?.uid
         if (userId == null) {
             trySend(emptyList())
-            close()
+            // Don't close(error), just wait for a new user or a manual close
             return@callbackFlow
         }
-
-        notificationsListener = firestore.collection("notifications")
+        val listener = firestore.collection("notifications")
             .whereEqualTo("userId", userId)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
+                    // Check if it's a logout-related permission error to prevent crashing
+                    if (error.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                        trySend(emptyList())
+                    } else {
+                        close(error)
+                    }
                     return@addSnapshotListener
                 }
 
-                val notifications = snapshot?.documents?.mapNotNull { doc ->
+                // Create the list explicitly to avoid "unresolved reference"
+                val items = snapshot?.documents?.mapNotNull { doc ->
                     try {
                         Notification(
                             id = doc.id,
@@ -53,6 +59,7 @@ class NotificationRepository @Inject constructor(
                             type = doc.getString("type") ?: "system",
                             title = doc.getString("title") ?: "",
                             message = doc.getString("message") ?: "",
+                            // Ensure 'data' mapping is safe
                             data = (doc.get("data") as? Map<*, *>)
                                 ?.mapKeys { it.key.toString() }
                                 ?.mapValues { it.value.toString() } ?: emptyMap(),
@@ -63,15 +70,22 @@ class NotificationRepository @Inject constructor(
                             createdAt = doc.getTimestamp("createdAt") ?: Timestamp.now()
                         )
                     } catch (e: Exception) {
-                        null
+                        null // Skip documents that don't match the format
                     }
                 } ?: emptyList()
 
-                trySend(notifications)
+                trySend(items) // Send the 'items' list
             }
+        notificationsListener = listener
 
-        awaitClose {
+
+        fun cleanup(){
             notificationsListener?.remove()
+            notificationsListener = null
+        }
+        awaitClose {
+            listener.remove()
+            notificationsListener = null // Keep your reference clean
         }
     }
 

@@ -8,5 +8,6 @@ data class ScheduleDetails(
     // By embedding the Schedule, we get all its fields automatically.
     val schedule: Schedule,
     val origin: String,
-    val destination: String
+    val destination: String,
+    val company: Company? = null
 )

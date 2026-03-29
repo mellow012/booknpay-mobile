@@ -1,280 +1,420 @@
 package com.example.booknpay.ui.booking.components
 
-
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.booknpay.ui.booking.BookingState
 import java.text.SimpleDateFormat
-import java.util.Locale
+import java.util.*
 
+// ── Color tokens ──────────────────────────────────────────────────────────────
+private val NavyBlue  = Color(0xFF2D3AC1)
+private val DeepNavy  = Color(0xFF1A2070)
+private val SoftBg    = Color(0xFFF0F1FB)
+private val GreenOk   = Color(0xFF2E7D32)
+
+// ── ConfirmationScreen ────────────────────────────────────────────────────────
+// Keeps the exact same signature as before so nothing in BookingScreen.kt breaks.
 @Composable
 fun ConfirmationScreen(
-    state: BookingState,
+    state:                  BookingState,
     onSubmitBookingRequest: () -> Unit,
-    onBack: () -> Unit
+    onBack:                 () -> Unit
 ) {
+    val timeFormat = SimpleDateFormat("EEE, MMM dd 'at' HH:mm", Locale.getDefault())
+    val departureTime = state.scheduleDetails?.schedule?.departureDateTime
+        ?.toDate()?.let { timeFormat.format(it) } ?: "N/A"
+
+    // Derived amounts
+    val pricePerSeat = state.scheduleDetails?.schedule?.price ?: 0.0
+    val seatCount    = state.selectedSeats.size
+    val platformFee  = 0.0   // extend later if needed
+    val total        = state.totalAmount
+
     LazyColumn(
-        modifier = Modifier
+        modifier       = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .background(SoftBg),
+        contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        // Header
+        // ── Page header ────────────────────────────────────────────────────
         item {
-            Text(
-                text = "Confirm Booking Request",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Review your booking details before submission",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Text(
+                    text       = "Booking Summary",
+                    style      = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text  = "Review your details before submitting",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
+            }
+            Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // Important Notice
+        // ── Route confirmation card ────────────────────────────────────────
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
-            ) {
+            RouteCard(
+                origin        = state.scheduleDetails?.origin ?: "",
+                destination   = state.scheduleDetails?.destination ?: "",
+                departureTime = departureTime
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // ── Important notice ───────────────────────────────────────────────
+        item {
+            NoticeCard()
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // ── Fare breakdown ─────────────────────────────────────────────────
+        item {
+            SummaryCard(title = "Fare Breakdown") {
+                FareRow(label = "Price per seat",    value = "MWK ${"%,.0f".format(pricePerSeat)}")
+                HorizontalDivider(color = Color(0xFFF0F0F0), thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+                FareRow(label = "Number of seats",   value = "$seatCount")
+                HorizontalDivider(color = Color(0xFFF0F0F0), thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier              = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment     = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.Default.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                    Column {
-                        Text(
-                            text = "Booking Request Process",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Your booking will be sent to the bus operator for approval. " +
-                                    "You'll be notified once they accept or reject your request. " +
-                                    "Payment will be required only after approval.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                }
-            }
-        }
-
-        // Trip Details
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "${state.scheduleDetails?.origin}",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForward,
-                            null,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Text(
-                            text = "${state.scheduleDetails?.destination}",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    val timeFormat = SimpleDateFormat("EEE, MMM dd 'at' HH:mm", Locale.getDefault())
-                    val departureTime = state.scheduleDetails?.schedule?.departureDateTime?.toDate()?.let {
-                        timeFormat.format(it)
-                    } ?: "N/A"
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CalendarToday, null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = departureTime)
-                    }
-                }
-            }
-        }
-
-        // Passengers
-        item {
-            Text(
-                text = "Passengers",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        items(state.passengerDetails) { passenger ->
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text(
-                            text = passenger.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "${passenger.age} years • ${passenger.gender.replaceFirstChar { it.uppercase() }}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Text(
-                            text = "Seat ${passenger.seatNumber}",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-
-        // Price Breakdown
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Booking Summary",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        text       = "Total Amount",
+                        style      = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold
                     )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Price per seat")
-                        Text("MWK ${state.scheduleDetails?.schedule?.price?.toInt() ?: 0}")
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Number of seats")
-                        Text("${state.selectedSeats.size}")
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Total Amount",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "MWK ${state.totalAmount.toInt()}",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
                     Text(
-                        text = "Payment required after operator approval",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text       = "MWK ${"%,.0f".format(total)}",
+                        style      = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color      = NavyBlue
                     )
                 }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text  = "Payment required after operator approval",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
             }
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Buttons
+        // ── Passengers ─────────────────────────────────────────────────────
+        item {
+            SummaryCard(title = "Passengers") {
+                state.passengerDetails.forEachIndexed { i, passenger ->
+                    PassengerRow(index = i, passenger = passenger)
+                    if (i < state.passengerDetails.lastIndex) {
+                        HorizontalDivider(color = Color(0xFFF0F0F0), thickness = 0.5.dp)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // ── Action buttons ─────────────────────────────────────────────────
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedButton(
-                    onClick = onBack,
-                    modifier = Modifier.weight(1f)
+                    onClick  = onBack,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape    = RoundedCornerShape(28.dp)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Back")
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Back", fontWeight = FontWeight.SemiBold)
                 }
 
                 Button(
-                    onClick = onSubmitBookingRequest,
-                    modifier = Modifier.weight(1f)
+                    onClick  = onSubmitBookingRequest,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape    = RoundedCornerShape(28.dp),
+                    colors   = ButtonDefaults.buttonColors(containerColor = NavyBlue)
                 ) {
-                    Text("Submit Request")
+                    Text("Submit Request", fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        null,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }
+    }
+}
 
-        item { Spacer(modifier = Modifier.height(16.dp)) }
+// ── Route Card ────────────────────────────────────────────────────────────────
+@Composable
+private fun RouteCard(
+    origin:        String,
+    destination:   String,
+    departureTime: String
+) {
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Brush.linearGradient(colors = listOf(DeepNavy, NavyBlue)))
+            .padding(20.dp)
+    ) {
+        Column {
+            Text(
+                text          = "ROUTE CONFIRMATION",
+                style         = MaterialTheme.typography.labelSmall,
+                color         = Color.White.copy(alpha = 0.65f),
+                letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text       = origin,
+                        style      = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color      = Color.White
+                    )
+                    Text(
+                        text  = "Origin",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+                // Arrow with bus icon
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.DirectionsBus,
+                            null,
+                            tint     = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text       = destination,
+                        style      = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color      = Color.White
+                    )
+                    Text(
+                        text  = "Destination",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.2f))
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.CalendarToday,
+                    null,
+                    tint     = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text  = departureTime,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.85f)
+                )
+            }
+        }
+    }
+}
+
+// ── Notice Card ───────────────────────────────────────────────────────────────
+@Composable
+private fun NoticeCard() {
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(NavyBlue.copy(alpha = 0.08f))
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            Icons.Default.Info,
+            null,
+            tint     = NavyBlue,
+            modifier = Modifier.size(20.dp)
+        )
+        Column {
+            Text(
+                text       = "Booking Request Process",
+                style      = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color      = NavyBlue
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text  = "Your booking will be sent to the bus operator for approval. " +
+                        "Payment is only required once they accept your request.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF444466),
+                lineHeight = 18.sp
+            )
+        }
+    }
+}
+
+// ── Generic Summary Card ──────────────────────────────────────────────────────
+@Composable
+private fun SummaryCard(
+    title:   String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier  = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape     = RoundedCornerShape(16.dp),
+        colors    = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text       = title,
+                style      = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            content()
+        }
+    }
+}
+
+// ── Fare Row ──────────────────────────────────────────────────────────────────
+@Composable
+private fun FareRow(label: String, value: String) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text  = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF666666)
+        )
+        Text(
+            text  = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+// ── Passenger Row ─────────────────────────────────────────────────────────────
+@Composable
+private fun PassengerRow(
+    index:     Int,
+    passenger: com.example.booknpay.ui.booking.PassengerDetail
+) {
+    Row(
+        modifier          = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(SoftBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Person,
+                    null,
+                    tint     = NavyBlue,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Text(
+                    text       = passenger.name.ifBlank { "Passenger ${index + 1}" },
+                    style      = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text  = "${passenger.age} yrs • ${passenger.gender.replaceFirstChar { it.uppercase() }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+        }
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = NavyBlue.copy(alpha = 0.1f)
+        ) {
+            Text(
+                text     = "Seat ${passenger.seatNumber}",
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                style    = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color    = NavyBlue
+            )
+        }
     }
 }

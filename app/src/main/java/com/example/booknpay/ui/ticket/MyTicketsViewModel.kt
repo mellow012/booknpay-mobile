@@ -1,10 +1,10 @@
 package com.example.booknpay.ui.ticket
 
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.booknpay.data.model.Booking
 import com.example.booknpay.data.repository.FirebaseBookingRepository
+import com.example.booknpay.util.TicketNotificationHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -19,7 +19,8 @@ data class MyTicketsState(
 
 @HiltViewModel
 class MyTicketsViewModel @Inject constructor(
-    private val bookingRepository: FirebaseBookingRepository
+    private val bookingRepository: FirebaseBookingRepository,
+    private val notificationHelper: TicketNotificationHelper
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MyTicketsState())
@@ -32,40 +33,42 @@ class MyTicketsViewModel @Inject constructor(
     private fun loadBookings() {
         viewModelScope.launch(Dispatchers.IO) {
             bookingRepository.getUserBookingsRealtime()
-                .flowOn(Dispatchers.IO)
-                .catch { e ->
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            error = e.message ?: "Failed to load bookings"
-                        )
-                    }
+                .distinctUntilChanged()
+                .scan(emptyList<Booking>()) { oldList, newList ->
+                    checkForStatusChanges(oldList, newList)
+                    newList
                 }
+                .catch { e -> /* handle error */ }
                 .collect { bookings ->
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            bookings = bookings,
-                            error = null
-                        )
-                    }
+                    _state.update { it.copy(isLoading = false, bookings = bookings) }
                 }
         }
     }
+
+    private fun checkForStatusChanges(oldList: List<Booking>, newList: List<Booking>) {
+        newList.forEach { newBooking ->
+            val oldBooking = oldList.find { it.id == newBooking.id }
+
+            // Logic: Transition from Pending -> Confirmed
+            if (oldBooking != null &&
+                oldBooking.bookingStatus == "pending" &&
+                newBooking.bookingStatus == "confirmed") {
+
+                notificationHelper.showBookingApprovedNotification(newBooking.bookingReference)
+            }
+        }
+    }
+
 
     fun cancelBooking(bookingId: String, scheduleId: String, seatNumbers: List<String>) {
         viewModelScope.launch(Dispatchers.IO) {
             val result = bookingRepository.cancelBooking(bookingId, scheduleId, seatNumbers)
             if (result.isFailure) {
-                _state.update {
-                    it.copy(error = result.exceptionOrNull()?.message ?: "Failed to cancel")
-                }
+                _state.update { it.copy(error = result.exceptionOrNull()?.message ?: "Failed to cancel") }
             }
         }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        bookingRepository.cleanup()
-    }
+    // No onCleared() override — callbackFlow + awaitClose handles Firestore
+    // listener teardown automatically when viewModelScope is cancelled.
 }

@@ -27,11 +27,7 @@ class BookingRepositoryImpl @Inject constructor(
     private val firebaseBookingRepository: FirebaseBookingRepository
 ) : BookingRepository {
 
-    /**
-     * Create booking with Firebase sync
-     * Note: routeId is obtained from schedule but NOT stored in booking
-     * (to match web app structure)
-     */
+    // ── Legacy single-passenger overload (kept for backward compat) ───────────
     override suspend fun createBooking(
         scheduleId: String,
         passengerName: String,
@@ -40,75 +36,92 @@ class BookingRepositoryImpl @Inject constructor(
         passengerPhone: String,
         numberOfPassengers: Int
     ): BookTicketResult = withContext(Dispatchers.IO) {
-        // Get schedule details for pricing
         val schedule = scheduleDao.getScheduleById(scheduleId)
             ?: return@withContext BookTicketResult.Failure("Schedule not found")
 
-        // Prepare passenger details
         val passengers = listOf(
-            Passenger(
-                name = passengerName,
-                age = passengerAge,
-                gender = passengerSex,
-                seatNumber = null
-            )
+            Passenger(name = passengerName, age = passengerAge, gender = passengerSex, seatNumber = null)
         )
-
-        val seatNumbers = emptyList<String>()
-
-        // We pass routeId but Firebase won't store it in booking
-        // (it's already in the schedule document)
         return@withContext when (val result = firebaseBookingRepository.createBooking(
             scheduleId = scheduleId,
             passengerDetails = passengers,
-            seatNumbers = seatNumbers,
+            seatNumbers = emptyList(),
             totalAmount = schedule.price * numberOfPassengers,
             companyId = schedule.companyId,
-            routeId = schedule.routeId // Passed but not stored
+            routeId = schedule.routeId
         )) {
             is BookTicketResult.Success -> {
                 bookingDao.insertBooking(result.booking)
                 scheduleDao.reserveSeat(scheduleId)
                 result
             }
-            is BookTicketResult.Failure -> result
-            is BookTicketResult.SoldOut -> result
+            else -> result
         }
     }
 
-    /**
-     * Get all bookings with real-time sync
-     */
-    override fun getAllBookings(): Flow<List<Booking>> {
+    // ── Full multi-passenger overload (used by BookingViewModel) ──────────────
+    override suspend fun createBooking(
+        scheduleId: String,
+        passengerDetails: List<Passenger>,
+        seatNumbers: List<String>,
+        totalAmount: Double,
+        companyId: String,
+        routeId: String
+    ): BookTicketResult = withContext(Dispatchers.IO) {
+        when (val result = firebaseBookingRepository.createBooking(
+            scheduleId = scheduleId,
+            passengerDetails = passengerDetails,
+            seatNumbers = seatNumbers,
+            totalAmount = totalAmount,
+            companyId = companyId,
+            routeId = routeId
+        )) {
+            is BookTicketResult.Success -> {
+                bookingDao.insertBooking(result.booking)
+                // Reserve each seat in the local cache
+                repeat(seatNumbers.size) { scheduleDao.reserveSeat(scheduleId) }
+                result
+            }
+            else -> result
+        }
+    }
+
+    // ── Real-time stream — delegates to Firebase, writes through to Room ──────
+    override fun getUserBookingsRealtime(): Flow<List<Booking>> {
         return firebaseBookingRepository.getUserBookingsRealtime()
             .onEach { bookings ->
-                bookings.forEach { booking ->
-                    bookingDao.insertBooking(booking)
-                }
+                bookings.forEach { bookingDao.insertBooking(it) }
             }
             .flowOn(Dispatchers.IO)
     }
 
-    /**
-     * Search ticket details - combines bookings with schedules and routes
-     * Gets routeId from schedule (not from booking)
-     */
+    // ── Cancel — delegates to Firebase ────────────────────────────────────────
+    override suspend fun cancelBooking(
+        bookingId: String,
+        scheduleId: String,
+        seatNumbers: List<String>
+    ): Result<Unit> = firebaseBookingRepository.cancelBooking(bookingId, scheduleId, seatNumbers)
+
+    // ── All bookings (local cache) ────────────────────────────────────────────
+    override fun getAllBookings(): Flow<List<Booking>> {
+        return firebaseBookingRepository.getUserBookingsRealtime()
+            .onEach { bookings -> bookings.forEach { bookingDao.insertBooking(it) } }
+            .flowOn(Dispatchers.IO)
+    }
+
+    // ── Search ticket details ─────────────────────────────────────────────────
     override fun searchTicketDetails(query: String): Flow<List<TicketDetails>> {
         return combine(
             bookingDao.getAllBookings(),
             scheduleDao.getAllActiveSchedules(),
             routeDao.getAllRoutes()
         ) { bookings, schedules, routes ->
-
             val scheduleMap = schedules.associateBy { it.id }
             val routeMap = routes.associateBy { it.id }
 
             val allTickets = bookings.mapNotNull { booking ->
-                // Get schedule to find routeId
                 val schedule = scheduleMap[booking.scheduleId] ?: return@mapNotNull null
-                // Then get route using routeId from schedule
                 val route = routeMap[schedule.routeId] ?: return@mapNotNull null
-
                 TicketDetails(
                     booking = booking,
                     originCity = route.origin,
@@ -119,37 +132,33 @@ class BookingRepositoryImpl @Inject constructor(
                 )
             }
 
-            if (query.isBlank()) {
-                allTickets
-            } else {
-                allTickets.filter { ticketDetail ->
-                    ticketDetail.booking.passengerDetails.any { passenger ->
-                        passenger.name.contains(query, ignoreCase = true)
-                    } || ticketDetail.booking.bookingReference.contains(query, ignoreCase = true)
-                            || ticketDetail.originCity.contains(query, ignoreCase = true)
-                            || ticketDetail.destinationCity.contains(query, ignoreCase = true)
-                }
+            if (query.isBlank()) allTickets
+            else allTickets.filter { td ->
+                td.booking.passengerDetails.any { it.name.contains(query, ignoreCase = true) }
+                        || td.booking.bookingReference.contains(query, ignoreCase = true)
+                        || td.originCity.contains(query, ignoreCase = true)
+                        || td.destinationCity.contains(query, ignoreCase = true)
             }
         }.flowOn(Dispatchers.IO)
     }
 
-    /**
-     * Get ticket details for a specific booking reference
-     */
+    // ── cleanup() is a no-op — callbackFlow handles listener lifecycle ────────
+    override fun cleanup(){
+        firebaseBookingRepository.cleanup()
+    }
+
+    // ── Convenience: look up a single ticket by booking reference ─────────────
     suspend fun getTicketDetailsByReference(bookingReference: String): TicketDetails? {
         return withContext(Dispatchers.IO) {
-            val bookings = bookingDao.getAllBookings().map { list ->
-                list.find { it.bookingReference == bookingReference }
-            }.flowOn(Dispatchers.IO)
+            val booking = bookingDao.getAllBookings()
+                .map { list -> list.find { it.bookingReference == bookingReference } }
+                .first() ?: return@withContext null
 
-            val booking = bookings.first() ?: return@withContext null
-
-            // Get routeId from schedule (not from booking)
             val schedule = scheduleDao.getScheduleById(booking.scheduleId)
                 ?: return@withContext null
 
-            val routes = routeDao.getAllRoutes().map { it.associateBy { route -> route.id } }
-            val route = routes.first()[schedule.routeId] ?: return@withContext null
+            val route = routeDao.getAllRoutes().first().find { it.id == schedule.routeId }
+                ?: return@withContext null
 
             TicketDetails(
                 booking = booking,
@@ -164,7 +173,6 @@ class BookingRepositoryImpl @Inject constructor(
 
     private fun formatTime(date: Date?): String {
         if (date == null) return "N/A"
-        val format = SimpleDateFormat("HH:mm", Locale.getDefault())
-        return format.format(date)
+        return SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
     }
 }

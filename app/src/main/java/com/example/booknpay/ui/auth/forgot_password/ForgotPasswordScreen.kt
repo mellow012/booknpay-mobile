@@ -1,44 +1,26 @@
 package com.example.booknpay.ui.auth.forgot_password
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ForgotPasswordViewModel.kt
+// Put this in its own file: ui/auth/forgot_password/ForgotPasswordViewModel.kt
+// ─────────────────────────────────────────────────────────────────────────────
+// (Keeping both in this file only to ship them together — split before committing)
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -49,18 +31,23 @@ import com.example.booknpay.domain.repository.AuthRepository
 import com.example.booknpay.domain.use_case.validation.ValidateEmailUseCase
 import com.example.booknpay.domain.use_case.validation.ValidationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// ViewModel
+// ── ViewModel ─────────────────────────────────────────────────────────────────
+data class ForgotPasswordState(
+    val email:         String  = "",
+    val emailError:    String? = null,
+    val isLoading:     Boolean = false,
+    val errorMessage:  String? = null,
+    val isEmailSent:   Boolean = false
+)
+
 @HiltViewModel
 class ForgotPasswordViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val validateEmail: ValidateEmailUseCase
+    private val validateEmail:  ValidateEmailUseCase
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ForgotPasswordState())
@@ -71,91 +58,69 @@ class ForgotPasswordViewModel @Inject constructor(
     }
 
     fun onSendResetEmailClick() {
-        val emailResult = validateEmail.execute(_state.value.email)
-
-        if (emailResult is ValidationResult.Error) {
-            _state.update { it.copy(emailError = emailResult.message) }
+        val result = validateEmail.execute(_state.value.email)
+        if (result is ValidationResult.Error) {
+            _state.update { it.copy(emailError = result.message) }
             return
         }
-
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, errorMessage = null) }
-
-            when (val result = authRepository.sendPasswordResetEmail(_state.value.email)) {
-                is AuthResult.Success<*> -> {
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            isEmailSent = true
-                        )
-                    }
-                }
-                is AuthResult.Error -> {
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            errorMessage = result.message
-                        )
-                    }
-                }
-                is AuthResult.Loading -> {
-                    // Already handled
-                }
+            when (val r = authRepository.sendPasswordResetEmail(_state.value.email)) {
+                is AuthResult.Success -> _state.update { it.copy(isLoading = false, isEmailSent = true) }
+                is AuthResult.Error   -> _state.update { it.copy(isLoading = false, errorMessage = r.message) }
+                is AuthResult.Loading -> Unit
             }
         }
     }
 
-    fun clearError() {
-        _state.update { it.copy(errorMessage = null) }
-    }
+    fun clearError() { _state.update { it.copy(errorMessage = null) } }
 }
 
-data class ForgotPasswordState(
-    val email: String = "",
-    val emailError: String? = null,
-    val isLoading: Boolean = false,
-    val errorMessage: String? = null,
-    val isEmailSent: Boolean = false
-)
-
-// Screen
+// ── Screen ────────────────────────────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForgotPasswordScreen(
     onNavigateBack: () -> Unit,
     viewModel: ForgotPasswordViewModel = hiltViewModel()
 ) {
-    val state by viewModel.state.collectAsState()
-    val focusManager = LocalFocusManager.current
+    val state        by viewModel.state.collectAsState()
+    val focusManager  = LocalFocusManager.current
 
-    // Show success dialog
     if (state.isEmailSent) {
         AlertDialog(
             onDismissRequest = onNavigateBack,
-            icon = { Icon(Icons.Default.CheckCircle, contentDescription = null) },
-            title = { Text("Email Sent") },
-            text = {
-                Text("Password reset instructions have been sent to ${state.email}. Please check your inbox.")
+            icon  = {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    null,
+                    tint     = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(40.dp)
+                )
+            },
+            title = { Text("Email sent", textAlign = TextAlign.Center) },
+            text  = {
+                Text(
+                    text      = "Password reset instructions have been sent to ${state.email}. Check your inbox.",
+                    textAlign = TextAlign.Center
+                )
             },
             confirmButton = {
-                TextButton(onClick = onNavigateBack) {
-                    Text("OK")
-                }
+                Button(
+                    onClick  = onNavigateBack,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Back to Sign In") }
             }
         )
     }
 
-    // Show error dialog
     if (state.errorMessage != null) {
         AlertDialog(
-            onDismissRequest = { viewModel.clearError() },
-            icon = { Icon(Icons.Default.Error, contentDescription = null) },
+            onDismissRequest = viewModel::clearError,
+            icon  = { Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("Error") },
-            text = { Text(state.errorMessage ?: "Unknown error") },
+            text  = { Text(state.errorMessage ?: "") },
             confirmButton = {
-                TextButton(onClick = { viewModel.clearError() }) {
-                    Text("OK")
-                }
+                TextButton(onClick = viewModel::clearError) { Text("OK") }
             }
         )
     }
@@ -166,9 +131,12 @@ fun ForgotPasswordScreen(
                 title = { Text("Reset Password") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
     ) { padding ->
@@ -177,54 +145,57 @@ fun ForgotPasswordScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(padding)
-                .padding(24.dp),
+                .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
-            Icon(
-                imageVector = Icons.Default.Lock,
-                contentDescription = null,
-                modifier = Modifier.size(80.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            // Lock icon in a tinted circle
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(88.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = null,
+                        tint     = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "Forgot Your Password?",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
+                text       = "Forgot your password?",
+                style      = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign  = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "Enter your email address and we'll send you instructions to reset your password.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text      = "Enter your email and we'll send you a link to reset your password.",
+                style     = MaterialTheme.typography.bodyMedium,
+                color     = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Email field
             OutlinedTextField(
-                value = state.email,
+                value         = state.email,
                 onValueChange = viewModel::onEmailChange,
-                label = { Text("Email") },
-                leadingIcon = {
-                    Icon(Icons.Default.Email, contentDescription = null)
-                },
-                isError = state.emailError != null,
-                supportingText = {
-                    if (state.emailError != null) {
-                        Text(state.emailError!!)
-                    }
-                },
+                label         = { Text("Email address") },
+                leadingIcon   = { Icon(Icons.Default.Email, null) },
+                isError       = state.emailError != null,
+                supportingText = { if (state.emailError != null) Text(state.emailError!!) },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Email,
-                    imeAction = ImeAction.Done
+                    imeAction    = ImeAction.Done
                 ),
                 keyboardActions = KeyboardActions(
                     onDone = {
@@ -233,30 +204,30 @@ fun ForgotPasswordScreen(
                     }
                 ),
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier   = Modifier.fillMaxWidth(),
+                shape      = MaterialTheme.shapes.medium
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Send button
             Button(
-                onClick = viewModel::onSendResetEmailClick,
-                enabled = !state.isLoading,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
+                onClick  = viewModel::onSendResetEmailClick,
+                enabled  = !state.isLoading,
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                shape    = MaterialTheme.shapes.large
             ) {
                 if (state.isLoading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
+                        modifier    = Modifier.size(22.dp),
+                        color       = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.5.dp
                     )
                 } else {
-                    Text("Send Reset Link")
+                    Text("Send Reset Link", style = MaterialTheme.typography.labelLarge)
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             TextButton(onClick = onNavigateBack) {
                 Text("Back to Sign In")
